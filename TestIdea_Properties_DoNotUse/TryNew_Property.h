@@ -25,21 +25,29 @@
 *    directly on the stored type.  However, that lets users bypass
 *    getter and setter logic, so use it with caution.
 *
+*  Note - no plan to use, this was an experiment:
+*  -----------------------------------------------
+*  The experiment succeeded.  It showed us that we don't want to do things this
+*  way.  I'm saving the package because it illustrates nicely how to do some
+*  fairly tricky specialization of template classes.
+*
+*  This property class does not inherit from the property type, removing issues
+*  with inheriting primitive types, e.g., now, no need for Boxing primitives.
+*  That's good!
+*  However, it's just too much work to define all of the Extension classes 
+*  needed to make this property generally useful.
+*  That's bad, very bad!
+
 *  Required Files:
 *  ---------------
-*  Properties.h
+*  TryNew_Property.h
 *
 *  Maintenance History:
 *  --------------------
-*  ver 1.3 : 02 Jul 2019
+*  ver 1.0 : 04 Jul 2019
+*  - first release
 *  - demonstrated that template specializations of Ext and Constraint
 *    work as expected
-*  ver 1.2 : 27 Jun 2019
-*  - added Ext and Constraint classes
-*  ver 1.1 : 30 Jan 2019
-*  - added ref()
-*  ver 1.0 : 11 Oct 2018
-*  - first release
 */
 
 #include <string>
@@ -48,6 +56,41 @@
 
 namespace Utilities
 {
+  ///////////////////////////////////////////////////////////////////
+  // Constraint provides inner methods for the property's
+  // getter and setter methods.
+  // - That allows you to add custom logic for the built in
+  //   property operator()(const T t) and operator()()
+  //   without changing the interface that clients use
+
+  template <typename T>
+  struct Constraint {
+    Constraint(T& t) : innerVar(t) {}
+    ~Constraint() {}
+    virtual void in(const T& t) {
+      /*-- add input constraints here --*/
+      if(verbose_)
+        std::cout << "\n  checking input constraints";
+      innerVar = t;
+    }
+    virtual T& out() {
+      /*-- add output constraints here --*/
+      if(verbose_)
+        std::cout << "\n  checking output constraints";
+      return innerVar;
+    }
+    void verbose(bool verbose)
+    {
+      verbose_ = verbose;
+    }
+    bool verbose()
+    {
+      return verbose_;
+    }
+    bool verbose_ = false;
+    T& innerVar;  // reference to E<T>'s innerVar, passed via constraint
+  };              // constructor in Property constructor initialization
+
   ///////////////////////////////////////////////////////////////////
   // Ext provides a custom extension interface for properties
   // - You can define any methods that are syntactically correct
@@ -84,7 +127,10 @@ namespace Utilities
     virtual ~Ext() {}
     void operator+=(const std::string& t)  // no chaining  because shouldn't return reference
     {
-      innerVar += t;
+      Constraint<std::string> c(const_cast<std::string&>(t));
+      //c.verbose(true);
+      c.in(t);
+      innerVar += c.out();
     }
     char& operator[](size_t n)
     {
@@ -146,30 +192,6 @@ namespace Utilities
     std::vector<T> innerVar;
   };
 
-  /////////////////////////////////////////////////////////////////////
-  //// Constraint provides inner methods for the property's
-  //// getter and setter methods.
-  //// - That allows you to add custom logic for the built in
-  ////   property operator()(const T t) and operator()()
-  ////   without changing the interface that clients use
-
-  template <typename T>
-  struct Constraint {
-    Constraint(T& t) : innerVar(t) {}
-    ~Constraint() {}
-    virtual void in(const T& t) {
-      /*-- add input constraints here --*/
-      //std::cout << "\n  checking input constraints";
-      innerVar = t;
-    }
-    virtual T& out() {
-      /*-- add output constraints here --*/
-      //std::cout << "\n  checking output constraints";
-      return innerVar;
-    }
-    T& innerVar;  // reference to E<T>'s innerVar, passed via constraint
-  };              // constructor in Property constructor initialization
-
   ///////////////////////////////////////////////////////////////////
   // Property class creates getter and setter methods
   // for an encapsulated variable with a single statement
@@ -215,6 +237,10 @@ namespace Utilities
     virtual T& ref()
     {
       return E<T>::innerVar;
+    }
+    void verbose(bool verbose)
+    {
+      c_.verbose(verbose);
     }
   private:
     C<T> c_;
