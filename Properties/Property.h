@@ -7,23 +7,23 @@
 /*
 *  Package Operations:
 *  -------------------
-*  This package provides a single Property<T, C> class that provides
-*  getter and setter methods and backing store T innerVar, using the property
-*  name.
+*  This package provides a Property<T, C> class that provides getter
+*  and setter methods and backing store T innerVar, using the property
+*  name. 
+*  - Property inherits from its T type, so any method provided by T
+*    is also provided by its property, Property<T>.
 *  - Here's an example:
-*      Property<int> intProp;
+*      Property<Box(int)> intProp;
 *      intProp(42)    Sets its internal store to 42
 *      intProp()      returns the internal store value
+*      Widget wgt;
+*      Property<Widget> wgtProp(wgt);
+*    Box is a class, provided in this package, that wraps primitive types
+*    to turn them into classes that Property can inherit.
 *  - So one declaration creates two methods with simple syntax, using
 *    the property's instance name.
 *  - The getter and setter methods call constraint methods C::in and C::out
 *    to provide logic that constrains getting and setting values.
-*  - The property derives from an extension class E that can be configured
-*    to supply methods you expect to be able to call on a T type.
-*  - Property also provides the method ref() which returns a reference
-*    to the underlying stored value.  That lets us call member functions
-*    directly on the stored type.  However, that lets users bypass
-*    getter and setter logic, so use it with caution.
 *
 *  Required Files:
 *  ---------------
@@ -93,11 +93,16 @@ namespace Utilities
   {
   public:
     Property() : T(), c_(*this) {}
+
+    //----< promotion constructor >----------------------------------
+
     Property(T& t, bool verbose = false) : T(t), c_(t, verbose)
     {
       c_.in(t);  // ensure that t satisfies constraints
     }
     virtual ~Property() {}
+
+    //----< assignment operator >------------------------------------
 
     Property<T, C>& operator=(const Property<T, C>& prop)
     {
@@ -111,7 +116,10 @@ namespace Utilities
       return *this;
     }
     //----< setter assigns the state of t to the internal store >----
-
+    /*
+    *  - Pass by value is used so that clients cannot change the
+    *    internal store without using the setter.
+    */
     virtual void operator()(const T t)
     {
       c_.in(t);  // in may contain input constraint logic

@@ -26,9 +26,9 @@ private:
 class X
 {
 public:
-  Property<Box<int>> intProp;
-  Property<Box<double>> dblProp;
-  Property<Widget> wgtProp;
+  Property<Box<int>> intProp;      // won't compile without boxing a primitive like int
+  Property<Box<double>> dblProp;   // won't compile without boxing
+  Property<Widget> wgtProp;        // doesn't need boxing - it's not a primitive
 };
 
 int main()
@@ -144,7 +144,6 @@ int main()
   }
 
   // assignment works because we managed it's C::innerValue
-
   std::cout << "\n  changing 2nd item to 42.0";
   newVecDblProp[1] = 42.0;
   vecDblProp = newVecDblProp;
