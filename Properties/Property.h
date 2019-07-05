@@ -31,9 +31,9 @@
 *
 *  Maintenance History:
 *  --------------------
-*  ver 1.3 : 02 Jul 2019
-*  - demonstrated that template specializations of Ext and Constraint
-*    work as expected
+*  ver 1.3 : 04 Jul 2019
+*  - removed Ext and its specializations, modified Constrain for enunciation.
+*  - demonstrated that Property classes work as expected after major changes.
 *  ver 1.2 : 27 Jun 2019
 *  - added Ext and Constraint classes
 *  ver 1.1 : 30 Jan 2019
