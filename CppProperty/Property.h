@@ -19,13 +19,13 @@
 *     PropertyBase<T>& operator=(const T& t)
 *     void operator()(const T& t)
 *     T operator()()
-* - PushAndPopProperty<T, Enabler=void>
-*     Intended for STL containers, e.g., PushAndPopProperty<std::vector<int>>
+* - PropertyOps<T, Enabler=void>
+*     Intended for STL containers, e.g., PropertyOps<std::vector<int>>
 *     Provides a lot of the STL methods like push_back(const T& t)
-* - PushAndPopProperty<T, std::enable_if_t<std::is_arithmetic<T>::value>>
+* - PropertyOps<T, std::enable_if_t<std::is_arithmetic<T>::value>>
 *     A specialization for fundamental data, e.g., int, double, ...
 * - TS_Property<T>
-*     A thread-safe version of PushAndPopProperty<T>
+*     A thread-safe version of PropertyOps<T>
 *
 * Required Files:
 * ---------------
@@ -43,6 +43,7 @@
 #include <thread>
 #include <mutex>
 #include <type_traits>
+#include "../CustomContainerTypeTraits/CustomContTypeTraits.h"
 
 ///////////////////////////////////////////////////////////////
 // PropContainer<T> class
@@ -55,15 +56,13 @@ public:
 
   virtual void lock()
   {
-    std::cout << "\n---- locking ----";
-    // lock
+    std::cout << "\n---- called empty lock() ----";
   }
   //----< override to provide locking >--------------------
 
   virtual void unlock()
   {
-    std::cout << "\n---- unlocking ----";
-    // unlock 
+    std::cout << "\n---- called empty unlock() ----";
   }
 
   PropContainer() :t_(T()) {}
@@ -80,7 +79,9 @@ protected:
   virtual void set(const T& t)
   {
     std::cout << "\n---- setting ----";
+    lock();
     t_ = t;
+    unlock();
   }
   //----< override to provide value management >-----------
 
@@ -123,29 +124,56 @@ public:
   }
   T operator()()
   {
-    return this->get();
+    // only one copy here due to return value optimization
+    this->lock();
+    T temp = this->get();
+    this->unlock();
+    return temp;
   }
 protected:
 };
 
 ///////////////////////////////////////////////////////////////
-// PushAndPopProperty<T> class
+// PropertyOps<T> class
 // - adds methods to interact with STL intances
 // - Enabler template paramter is just to manage specialization
 //
 
 template<class T, class Enabler = void>
-class PushAndPopProperty : public PropertyBase<T>
+class PropertyOps : public PropertyBase<T>
+{
+public:
+  PropertyOps() {}
+  PropertyOps(const T& t) /*: Property<T>(t) {}*/
+  {
+    this->set(t);
+  }
+
+  PropertyOps<T>& operator=(const T& t)
+  {
+    this->set(t);
+    return *this;
+  }
+};
+
+///////////////////////////////////////////////////////////////
+// PropertyOps<T, std::enable_if_<...>>> class
+// - Specializes for STL sequence containers with pushes and pops etc.
+// - Second template parameter selects for STL sequence containers
+//
+
+template<class T>
+class PropertyOps<T, std::enable_if_t<is_stl_seq_container<T>::value>> : public PropertyBase<T>
 {
 public:
   using iterator = typename T::iterator;
 
-  PushAndPopProperty() {}
-  PushAndPopProperty(const T& t) /*: PropertyBase<T>(t) {}*/
+  PropertyOps() {}
+  PropertyOps(const T& t)
   {
     this->set(t);
   }
-  PushAndPopProperty<T>& operator=(const T& t)
+  PropertyOps<T>& operator=(const T& t)
   {
     //std::cout << "\n-------- calling operator=(const T& t) ----------";
     this->set(t);
@@ -197,11 +225,11 @@ public:
 
   typename T::value_type operator[](int n) const
   {
-    PushAndPopProperty<T>* pPAPP = const_cast<PushAndPopProperty<T>*>(this);
+    PropertyOps<T>* pPAPP = const_cast<PropertyOps<T>*>(this);
     T& t = pPAPP->get();
-    //pPAPP->lock();
+    pPAPP->lock();
     typename T::value_type v = t[n];
-    //pPAPP->unlock();
+    pPAPP->unlock();
     return v;
   }
   /*
@@ -212,7 +240,7 @@ public:
   */
   typename T::value_type& operator[](int n)
   {
-    PushAndPopProperty<T>* pPAPP = const_cast<PushAndPopProperty<T>*>(this);
+    PropertyOps<T>* pPAPP = const_cast<PropertyOps<T>*>(this);
     T& t = pPAPP->get();
     typename T::value_type& v = t[n];
     return v;
@@ -295,25 +323,198 @@ public:
 };
 
 ///////////////////////////////////////////////////////////////
-// PushAndPopProperty<T, std::enable_if_<...>>> class
+// PropertyOps<T, std::enable_if_<...>>> class
 // - Specializes away all of the pushes and pops etc.
-// - Second template parameter selects for fundamental types
-//
+// - Second template parameter selects for associative containers
+// - A few more operations would be useful like operator[]
 
 template<class T>
-class PushAndPopProperty<T, std::enable_if_t<std::is_fundamental<T>::value>> : public PropertyBase<T>
+class PropertyOps<T, std::enable_if_t<is_stl_assoc_container<T>::value>> : public PropertyBase<T>
 {
 public:
-  PushAndPopProperty() {}
-  PushAndPopProperty(const T& t) /*: Property<T>(t) {}*/
+  using iterator = typename T::iterator;
+  using const_iterator = typename T::const_iterator;
+  using key_type = typename T::key_type;
+  using mapped_type = typename T::mapped_type;
+  using value_type = typename T::value_type;
+
+  PropertyOps() {}
+  PropertyOps(const T& t)
   {
     this->set(t);
   }
 
-  PushAndPopProperty<T>& operator=(const T& t)
+  PropertyOps<T>& operator=(const T& t)
   {
     this->set(t);
     return *this;
+  }
+
+  iterator begin() {
+    T& t = (*this).get();
+    this->lock();
+    iterator beg = t.begin();
+    this->unlock();
+    return beg;
+  }
+
+  iterator end() {
+    T& t = (*this).get();
+    this->lock();
+    iterator end = t.end();
+    this->unlock();
+    return end;
+  }
+
+  size_t size()
+  {
+    T& t = this->get();
+    this->lock();
+    size_t sz = t.size();
+    this->unlock();
+    return sz;
+  }
+
+  typename iterator insert(iterator iter, typename const T::value_type& value)
+  {
+    T& t = this->get();
+    this->lock();
+    iterator curr = t.insert(iter, value);
+    this->unlock();
+    return curr;
+  }
+
+  typename auto insert(typename const T::value_type& value)
+  {
+    T& t = this->get();
+    this->lock();
+    auto curr = t.insert(value);
+    this->unlock();
+    return curr;
+  }
+
+  typename iterator erase(iterator iter)
+  {
+    T& t = this->get();
+    this->lock();
+    iterator next = t.erase(iter);
+    this->unlock();
+    return next;
+  }
+
+  typename const_iterator find(const key_type& key)
+  {
+    T& t = this->get();
+    this->lock();
+    const_iterator found = t.find(key);
+    this->unlock();
+    return found;
+  }
+
+  bool contains(const key_type& key) const
+  {
+    PropertyOps<T>* pPAPP = const_cast<PropertyOps<T>*>(this);
+    T& t = pPAPP->get();
+    pPAPP->lock();
+    const_iterator found = t.find(key);
+    iterator end = t.end();
+    pPAPP->unlock();
+    return found != end;
+  }
+
+  const typename T::mapped_type operator[](const key_type& key) const
+  {
+    key_type savedKey = key;
+
+    PropertyOps<T>* pPAPP = const_cast<PropertyOps<T>*>(this);
+    T& t = pPAPP->get();
+    if (!contains(key))
+    {
+      std::invalid_argument exc("exception: key not found");
+      throw(exc);
+    }
+    pPAPP->lock();
+    const typename T::mapped_type v = t[key];
+    pPAPP->unlock();
+    return v;
+  }
+  /*
+  * - This method is a replacement for mapProperty[key] = value.
+  * - I wasn't able to figure out how to implement in a
+  *   reasonable amount of time
+  * - If key does not exist, a new item { key, value } is inserted.
+  *   and method returns false (was created)
+  * - If key does exist, its mapped value is set to value
+  *   and method returns true (was edited)
+  */
+  bool editItem(const key_type& key, const mapped_type& value)
+  {
+    T& t = this->get();
+    std::pair<key_type, mapped_type> item;
+    item.first = key;
+    item.second = value;
+    iterator iter = t.find(key);
+    bool rtn = true;
+    if (iter == t.end())
+    {
+      bool rtn = false;
+      insert(item);
+    }
+    else
+    {
+      iter->second = value;
+    }
+    return rtn;
+  }
+};
+
+///////////////////////////////////////////////////////////////
+// Property<T> class
+//
+
+template<typename T>
+class Property : public PropertyOps<T>
+{
+public:
+  Property() {}
+  Property(const T& t)
+  {
+    this->set(t);
+  }
+  ~Property() {}
+
+  void operator=(const T& t)
+  {
+    this->set(t);
+  }
+
+protected:
+
+  //----< override to provide value management >-----------
+
+  virtual void set(const T& t) override
+  {
+    //std::cout << "\n---- setting ----";
+    this->t_ = t;
+  }
+  //----< override to provide value management >-----------
+
+  virtual T& get() override
+  {
+    //std::cout << "\n---- getting ----";
+    return this->t_;
+  }
+  //----< override to remove lock enunciation >------------
+
+  virtual void lock() override
+  {
+  
+  }
+  //----< override to remove unlock enunciation >----------
+
+  virtual void unlock() override
+  {
+
   }
 };
 
@@ -326,10 +527,10 @@ public:
 //
 
 template<typename T>
-class TS_Property : public PushAndPopProperty<T>
+class TS_Property : public PropertyOps<T>
 {
 public:
-  TS_Property() : pMtx(new std::recursive_mutex), lck(*pMtx) 
+  TS_Property() : pMtx(new std::recursive_mutex), lck(*pMtx)
   {
     testLock();
   }
@@ -338,10 +539,10 @@ public:
     testLock();
     this->set(t);
   }
-  ~TS_Property() 
+  ~TS_Property()
   {
     pMtx->unlock();
-    delete pMtx; 
+    delete pMtx;
   }
 
   void operator=(const T& t)
@@ -373,8 +574,6 @@ protected:
   virtual T& get() override
   {
     //std::cout << "\n---- getting ----";
-    // methods that call get() need to setGuards
-
     return this->t_;
   }
 
@@ -396,3 +595,44 @@ protected:
   std::recursive_mutex* pMtx;
   std::unique_lock<std::recursive_mutex> lck;
 };
+
+///////////////////////////////////////////////////////////
+// function templates that overload on type traits
+//   The technique used here was described by Eli Bendersky:
+//   https://eli.thegreenplace.net/2014/sfinae-and-enable_if/
+//
+
+template <typename T, typename std::enable_if<std::is_fundamental<T>::value, T>::type* = nullptr>
+void show(
+  const std::string & msg,
+  const T & t
+)
+{
+  std::cout << "\n  " << msg << t;
+}
+
+template <typename T, typename std::enable_if<is_stl_seq_container<T>::value, T>::type* = nullptr>
+void show(
+  const std::string & msg,
+  const T & t
+)
+{
+  std::cout << "\n  " << msg << "\n    ";
+  for (auto item : t)
+  {
+    std::cout << item << " ";
+  }
+}
+
+template <typename T, typename std::enable_if<is_stl_assoc_container<T>::value, T>::type* = nullptr>
+void show(
+  const std::string & msg,
+  const T & t
+)
+{
+  std::cout << "\n  " << msg << "\n    ";
+  for (auto item : t)
+  {
+    std::cout << "{" << item.first << ", " << item.second << "} ";
+  }
+}
