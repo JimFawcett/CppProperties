@@ -43,6 +43,7 @@
 #include <thread>
 #include <mutex>
 #include <type_traits>
+#include <iostream>
 #include "../CustomContainerTypeTraits/CustomContTypeTraits.h"
 
 ///////////////////////////////////////////////////////////////
