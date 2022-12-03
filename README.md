@@ -1,5 +1,5 @@
 # CppProperties
 
-https://JimFawcett.github.io/CppProperties.html
+Implements encapsulated properties using templates and template metaprogramming.
 
-Implemts property template class
+<a href="https://JimFawcett.github.io/CppProperties.html">Documentation</a>
